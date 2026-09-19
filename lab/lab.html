@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Stylo Drift lab</title>
+  <style>
+    body { font-family: sans-serif; max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem; }
+    textarea { width: 100%; min-height: 9rem; font: 1rem/1.4 sans-serif; }
+    label { display: inline-block; margin: 0.4rem 0.8rem 0.4rem 0; }
+    button { font-size: 1rem; padding: 0.35rem 0.9rem; }
+    .meta { color: #444; margin-top: 0.6rem; }
+    pre { white-space: pre-wrap; background: #f4f4f4; padding: 0.8rem; }
+  </style>
+</head>
+<body>
+  <h1>Stylo Drift lab</h1>
+  <p>Runs in this page. No server, no model.</p>
+  <textarea id="src">I really think this is a pretty important issue because people never actually look at the data. It's just the same thing every time, and I don't think that's acceptable.</textarea>
+  <div>
+    <label>Intensity <input id="int" type="range" min="1" max="5" value="4"></label>
+    <label>Persona
+      <select id="per">
+        <option value="rotate">rotate</option>
+      </select>
+    </label>
+    <label>Seed <input id="seed" type="number" value="42"></label>
+    <button type="button" id="go">Drift</button>
+  </div>
+  <div class="meta" id="meta"></div>
+  <pre id="out"></pre>
+  <script src="../engine-bundle.js"></script>
+  <script>
+    var per = document.getElementById('per');
+    StyloDrift.PERSONA_IDS.forEach(function (id) {
+      var o = document.createElement('option');
+      o.value = id;
+      o.textContent = id;
+      per.appendChild(o);
+    });
+    document.getElementById('go').onclick = function () {
+      var res = StyloDrift.drift(document.getElementById('src').value, {
+        intensity: parseInt(document.getElementById('int').value, 10),
+        persona: document.getElementById('per').value,
+        seed: parseInt(document.getElementById('seed').value, 10)
+      });
+      document.getElementById('out').textContent = res.text;
+      document.getElementById('meta').textContent =
+        'persona ' + res.persona +
+        ' · char n-gram change ' + res.scores.pinc3 + '%' +
+        ' · function-word shift ' + res.scores.func + '%' +
+        ' · ' + res.text.length + ' chars';
+    };
+  </script>
+</body>
+</html>
