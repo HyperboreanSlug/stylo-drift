@@ -1,15 +1,18 @@
 # Stylo Drift
 
+[Install Greasemonkey](https://addons.mozilla.org/firefox/addon/greasemonkey/) → [**Install Stylo Drift**](../../raw/main/stylo-drift.user.js)
+
+Firefox: Greasemonkey or Violentmonkey first, then the install link. The manager prompts automatically.
+
 Greasemonkey userscript. Rewrites compose/reply text on X so function-word rates, character n-grams, punctuation, contractions, spelling, and sentence length move away from your baseline.
 
 Compute: the X tab’s JavaScript. No GPU, no API, no local model. A tweet rewrite is a few milliseconds of string passes.
 
 ## Install (about 2 minutes)
 
-1. Install [Greasemonkey](https://addons.mozilla.org/firefox/addon/greasemonkey/) (Violentmonkey also works).
-2. Open `stylo-drift.user.js` in Firefox (drag the file onto a Firefox window).
-3. Click **Install**.
-4. Open `https://x.com`, type a post, click **Post**. The script rewrites first.
+1. [Install Greasemonkey](https://addons.mozilla.org/firefox/addon/greasemonkey/) (Violentmonkey also works).
+2. Click **[Install Stylo Drift](../../raw/main/stylo-drift.user.js)** and confirm in the manager.
+3. Open `https://x.com`, type a post, click **Post**. The script rewrites first.
 
 Rebuild after source edits:
 
