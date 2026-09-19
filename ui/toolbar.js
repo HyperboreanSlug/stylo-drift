@@ -1,5 +1,6 @@
 StyloDrift._formatScore = function (res) {
   if (!res || !res.scores) return '';
+  if (res.text && res._src && res.text === res._src) return 'no change';
   return res.persona + ' · n-gram ' + res.scores.pinc3 + '% · func ' + res.scores.func + '%';
 };
 

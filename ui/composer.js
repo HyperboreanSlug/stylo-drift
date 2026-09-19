@@ -55,7 +55,20 @@ StyloDrift.findComposers = function (root) {
 StyloDrift.readComposer = function (el) {
   var ed = StyloDrift.composerEl(el);
   if (!ed) return '';
-  return (ed.innerText || ed.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
+  var node = ed;
+  if (ed.getAttribute && ed.getAttribute('contenteditable') !== 'true') {
+    var inner = ed.querySelector && ed.querySelector('[contenteditable="true"]');
+    if (inner) node = inner;
+  }
+  var clone = node.cloneNode(true);
+  var drop = clone.querySelectorAll(
+    'article, [data-testid="tweet"], [data-testid="tweetText"], [data-testid="quoteTweet"], img, video'
+  );
+  var i;
+  for (i = 0; i < drop.length; i++) {
+    if (drop[i] !== clone && drop[i].parentNode) drop[i].parentNode.removeChild(drop[i]);
+  }
+  return (clone.innerText || clone.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
 };
 
 StyloDrift._selectAll = function (ed) {

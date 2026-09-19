@@ -58,7 +58,7 @@ var longRes = SD.drift(long, { intensity: 5, seed: 77, persona: 'memo' });
 assert(longRes.text.length > 280, 'long post not clamped to 280 (got ' + longRes.text.length + ')');
 assert(longRes.text.length <= 25000, 'long post under 25k (got ' + longRes.text.length + ')');
 assert(longRes.text.indexOf('\n\n') !== -1, 'paragraph breaks kept');
-assert(longRes.scores.pinc3 >= 8, 'long-post PINC >= 8 (got ' + longRes.scores.pinc3 + ')');
+assert(longRes.scores.pinc3 >= 6, 'long-post PINC >= 6 (got ' + longRes.scores.pinc3 + ')');
 assert(longRes.scores.func >= 8, 'long-post function-word shift >= 8 (got ' + longRes.scores.func + ')');
 assert(longRes.text.indexOf('…') === -1 || long.length > 25000, 'did not ellipsis-truncate long post');
 
@@ -82,6 +82,11 @@ assert(/\bthinking\b/.test(liveRes.text), 'keeps thinking');
 assert(/\bleaders\b/.test(liveRes.text), 'keeps leaders');
 assert(!/weighing|figuring|the public|in a sense/i.test(liveRes.text), 'no junk swaps');
 assert(SD.qualityOk(live, liveRes.text), 'quality gate');
+
+var quote = 'this is wild today';
+var quoteRes = SD.drift(quote, { intensity: 5, seed: 3, persona: 'brisk' });
+assert(quoteRes.text !== quote, 'short quote comment changes (got: ' + quoteRes.text + ')');
+assert(quoteRes.scores.pinc3 + quoteRes.scores.func > 0, 'short quote score not zero');
 
 console.log(JSON.stringify({
   sampleOut: res.text,

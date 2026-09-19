@@ -28,7 +28,11 @@ StyloDrift.SAFE_PHRASES = {
   'in order to': ['to'],
   'due to the fact that': ['because'],
   'at this point': ['now'],
-  'as well': ['too']
+  'as well': ['too'],
+  'this is': ['that is'],
+  'that is': ['this is'],
+  'i think': ['i believe'],
+  'i believe': ['i think']
 };
 
 StyloDrift.SAFE_WORDS = {
@@ -57,5 +61,10 @@ StyloDrift.SAFE_WORDS = {
   since: ['because'],
   although: ['though', 'even though'],
   though: ['although'],
-  however: ['still', 'even so']
+  however: ['still', 'even so'],
+  just: ['simply', 'only'],
+  simply: ['just'],
+  very: ['really', 'highly'],
+  also: ['too'],
+  still: ['yet', 'even now']
 };

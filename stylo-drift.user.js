@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Stylo Drift
 // @namespace    local.stylo-drift
-// @version      1.3.1
+// @version      1.3.2
 // @description  Rewrite compose text on X to shift writing-style features
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -116,13 +116,6 @@ StyloDrift.protect = function (text) {
   for (var i = 0; i < patterns.length; i++) {
     out = out.replace(patterns[i], mask);
   }
-  out = out.replace(/\b[A-Z][a-z]+\b/g, function (m, offset, full) {
-    if (m === 'I') return m;
-    if (offset === 0) return m;
-    var before = full.slice(0, offset);
-    if (/(^|[.!?]\s+)$/.test(before)) return m;
-    return mask(m);
-  });
   return { text: out, slots: slots };
 };
 
@@ -283,7 +276,11 @@ StyloDrift.SAFE_PHRASES = {
   'in order to': ['to'],
   'due to the fact that': ['because'],
   'at this point': ['now'],
-  'as well': ['too']
+  'as well': ['too'],
+  'this is': ['that is'],
+  'that is': ['this is'],
+  'i think': ['i believe'],
+  'i believe': ['i think']
 };
 
 StyloDrift.SAFE_WORDS = {
@@ -312,7 +309,12 @@ StyloDrift.SAFE_WORDS = {
   since: ['because'],
   although: ['though', 'even though'],
   though: ['although'],
-  however: ['still', 'even so']
+  however: ['still', 'even so'],
+  just: ['simply', 'only'],
+  simply: ['just'],
+  very: ['really', 'highly'],
+  also: ['too'],
+  still: ['yet', 'even now']
 };
 
 /* --- data/function-alts.js --- */
@@ -744,13 +746,15 @@ StyloDrift.applyPhrases = function (text, persona, rate, rng) {
 
 /* --- lib/safe.js --- */
 StyloDrift.applySafe = function (text, persona, rate, rng) {
-  var out = text;
+  var original = String(text);
+  var out = original;
   var keys = Object.keys(StyloDrift.SAFE_PHRASES).sort(function (a, b) {
     return b.length - a.length;
   });
   var i;
   for (i = 0; i < keys.length; i++) {
     var from = keys[i];
+    if (original.toLowerCase().indexOf(from) === -1) continue;
     var alts = StyloDrift.SAFE_PHRASES[from];
     var re = new RegExp(StyloDrift.escapeRe(from), 'gi');
     out = out.replace(re, function (m) {
@@ -776,6 +780,23 @@ StyloDrift.applySafe = function (text, persona, rate, rng) {
     return StyloDrift.matchCase(m, pick);
   });
   return out;
+};
+
+StyloDrift.forceStyle = function (text, persona, rng) {
+  var src = String(text);
+  var out = StyloDrift.applyContractions(src, persona, 1, rng);
+  if (out !== src) return out;
+  out = StyloDrift.applySafe(src, persona, 1, rng);
+  if (out !== src) return out;
+  var sents = StyloDrift.splitSentences(src);
+  if (sents.length >= 2) {
+    return sents[0].replace(/[.!?]+$/, '') + ' — ' + StyloDrift.lowerStart(sents[1]);
+  }
+  if (/^I\b/.test(src) && !/^Honestly,/i.test(src) && !/^I honestly\b/i.test(src)) {
+    return 'Honestly, ' + StyloDrift.lowerStart(src);
+  }
+  if (!/^Look,/i.test(src)) return 'Look, ' + StyloDrift.lowerStart(src);
+  return src;
 };
 
 /* --- lib/quality.js --- */
@@ -1572,13 +1593,15 @@ StyloDrift.drift = function (text, opts) {
   var persona = StyloDrift.pickPersona(opts.persona, StyloDrift.makeRng(seed));
   var rates = StyloDrift.RATES[intensity];
   var maxLen = StyloDrift.maxLenFor(raw, opts);
-  var body = StyloDrift.driftOnce(raw, persona, rates, StyloDrift.makeRng(seed), maxLen);
-  if (!StyloDrift.qualityOk(raw, body)) {
-    var mild = Object.assign({}, rates, { safe: 1, contr: 1, spell: 0.5, punct: 0, syntax: 0, hedge: 0 });
-    body = StyloDrift.driftOnce(raw, persona, mild, StyloDrift.makeRng(seed + 3), maxLen);
+  var rng = StyloDrift.makeRng(seed);
+  var body = StyloDrift.driftOnce(raw, persona, rates, rng, maxLen);
+  if (body === raw || !StyloDrift.qualityOk(raw, body)) {
+    body = StyloDrift.forceStyle(raw, persona, StyloDrift.makeRng(seed + 11));
   }
-  if (!StyloDrift.qualityOk(raw, body)) body = raw;
-  return { text: body, persona: persona.id, scores: StyloDrift.score(raw, body), seed: seed };
+  if (!StyloDrift.qualityOk(raw, body)) {
+    body = StyloDrift.applyContractions(raw, persona, 1, StyloDrift.makeRng(seed + 13));
+  }
+  return { text: body, persona: persona.id, scores: StyloDrift.score(raw, body), seed: seed, _src: raw };
 };
 
 /* --- ui/settings.js --- */
@@ -1707,7 +1730,20 @@ StyloDrift.findComposers = function (root) {
 StyloDrift.readComposer = function (el) {
   var ed = StyloDrift.composerEl(el);
   if (!ed) return '';
-  return (ed.innerText || ed.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
+  var node = ed;
+  if (ed.getAttribute && ed.getAttribute('contenteditable') !== 'true') {
+    var inner = ed.querySelector && ed.querySelector('[contenteditable="true"]');
+    if (inner) node = inner;
+  }
+  var clone = node.cloneNode(true);
+  var drop = clone.querySelectorAll(
+    'article, [data-testid="tweet"], [data-testid="tweetText"], [data-testid="quoteTweet"], img, video'
+  );
+  var i;
+  for (i = 0; i < drop.length; i++) {
+    if (drop[i] !== clone && drop[i].parentNode) drop[i].parentNode.removeChild(drop[i]);
+  }
+  return (clone.innerText || clone.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
 };
 
 StyloDrift._selectAll = function (ed) {
@@ -1937,6 +1973,7 @@ StyloDrift.updateHud = function (msg) {
 /* --- ui/toolbar.js --- */
 StyloDrift._formatScore = function (res) {
   if (!res || !res.scores) return '';
+  if (res.text && res._src && res.text === res._src) return 'no change';
   return res.persona + ' · n-gram ' + res.scores.pinc3 + '% · func ' + res.scores.func + '%';
 };
 
