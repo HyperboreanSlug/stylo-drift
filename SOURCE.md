@@ -44,7 +44,9 @@ build.py       concatenates modules into stylo-drift.user.js
 | `lib/hedges.js` | Insert or strip hedges | Discourse-marker fingerprint |
 | `lib/personas.js` | Named style targets + rates | Imitation instead of random noise |
 | `lib/features.js` | PINC and function-word distance | Score the rewrite |
-| `lib/engine.js` | `StyloDrift.drift()` | Paragraph-safe pipeline; 280 or 25,000 cap |
+| `lib/safe.js` | Meaning-preserving style swaps | Keep the claim; change the fingerprint |
+| `lib/quality.js` | Reject broken rewrites | No junk like "White the public" |
+| `lib/engine.js` | `StyloDrift.drift()` | Safe pipeline; 280 or 25,000 cap |
 
 ## ui/
 

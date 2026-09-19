@@ -9,7 +9,7 @@ HEADER = """\
 // ==UserScript==
 // @name         Stylo Drift
 // @namespace    local.stylo-drift
-// @version      1.2.0
+// @version      1.3.0
 // @description  Rewrite compose text on X to shift writing-style features
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -34,10 +34,13 @@ ENGINE = [
     "lib/protect.js",
     "lib/sentences.js",
     "data/phrases.js",
+    "data/safe-swaps.js",
     "data/function-alts.js",
     "data/synonyms.js",
     "data/synonyms-more.js",
     "lib/phrases.js",
+    "lib/safe.js",
+    "lib/quality.js",
     "lib/function-words.js",
     "lib/synonyms.js",
     "lib/closed-class.js",

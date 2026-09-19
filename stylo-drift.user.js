@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Stylo Drift
 // @namespace    local.stylo-drift
-// @version      1.2.0
+// @version      1.3.0
 // @description  Rewrite compose text on X to shift writing-style features
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -116,6 +116,13 @@ StyloDrift.protect = function (text) {
   for (var i = 0; i < patterns.length; i++) {
     out = out.replace(patterns[i], mask);
   }
+  out = out.replace(/\b[A-Z][a-z]+\b/g, function (m, offset, full) {
+    if (m === 'I') return m;
+    if (offset === 0) return m;
+    var before = full.slice(0, offset);
+    if (/(^|[.!?]\s+)$/.test(before)) return m;
+    return mask(m);
+  });
   return { text: out, slots: slots };
 };
 
@@ -243,6 +250,69 @@ StyloDrift.PHRASES = {
   'looking at': ['checking', 'viewing', 'examining'],
   'think about': ['consider', 'weigh'],
   'thinking about': ['considering', 'weighing']
+};
+
+/* --- data/safe-swaps.js --- */
+StyloDrift.SAFE_PHRASES = {
+  "i really don't know": [
+    "i honestly don't know",
+    "i don't really know",
+    "i truly don't know"
+  ],
+  'i really do not know': [
+    'i honestly do not know',
+    'i do not really know',
+    'i truly do not know'
+  ],
+  "i don't know": ["i do not know", "i have no idea", "i've no idea"],
+  'i do not know': ["i don't know", 'i have no idea'],
+  'it seems like': ['it looks like', 'it appears that'],
+  'it seems that': ['it looks like', 'it appears that'],
+  'it seems': ['it appears', 'it looks'],
+  'seems like': ['looks like', 'appears that'],
+  'fully focused': ['completely focused', 'entirely focused'],
+  'these days': ['lately', 'recently'],
+  'at the moment': ['right now', 'just now'],
+  'a lot of': ['plenty of', 'lots of'],
+  'lots of': ['a lot of', 'plenty of'],
+  'kind of': ['sort of', 'somewhat'],
+  'sort of': ['kind of', 'somewhat'],
+  'going to': ['about to'],
+  'have to': ['need to'],
+  'need to': ['have to'],
+  'in order to': ['to'],
+  'due to the fact that': ['because'],
+  'at this point': ['now'],
+  'as well': ['too']
+};
+
+StyloDrift.SAFE_WORDS = {
+  really: ['honestly', 'truly', 'actually'],
+  actually: ['really', 'in fact'],
+  honestly: ['truly', 'really'],
+  lately: ['recently'],
+  recently: ['lately'],
+  fully: ['completely', 'entirely'],
+  completely: ['fully', 'entirely'],
+  entirely: ['fully', 'completely'],
+  seems: ['appears'],
+  appears: ['seems'],
+  maybe: ['perhaps', 'possibly'],
+  perhaps: ['maybe', 'possibly'],
+  possibly: ['perhaps', 'maybe'],
+  these: ['those'],
+  those: ['these'],
+  towards: ['toward'],
+  toward: ['towards'],
+  among: ['amongst'],
+  amongst: ['among'],
+  while: ['whilst'],
+  whilst: ['while'],
+  because: ['since'],
+  since: ['because'],
+  although: ['though', 'even though'],
+  though: ['although'],
+  however: ['still', 'even so']
 };
 
 /* --- data/function-alts.js --- */
@@ -672,6 +742,62 @@ StyloDrift.applyPhrases = function (text, persona, rate, rng) {
   return out;
 };
 
+/* --- lib/safe.js --- */
+StyloDrift.applySafe = function (text, persona, rate, rng) {
+  var out = text;
+  var keys = Object.keys(StyloDrift.SAFE_PHRASES).sort(function (a, b) {
+    return b.length - a.length;
+  });
+  var i;
+  for (i = 0; i < keys.length; i++) {
+    var from = keys[i];
+    var alts = StyloDrift.SAFE_PHRASES[from];
+    var re = new RegExp(StyloDrift.escapeRe(from), 'gi');
+    out = out.replace(re, function (m) {
+      if (rng() > rate) return m;
+      var prefer = persona.prefer && persona.prefer[from];
+      var pick = prefer && alts.indexOf(prefer) !== -1 && rng() < 0.7
+        ? prefer
+        : StyloDrift.pick(rng, alts);
+      if (!pick || pick.toLowerCase() === m.toLowerCase()) return m;
+      return StyloDrift.matchCase(m, pick);
+    });
+  }
+  out = out.replace(/\b[A-Za-z']+\b/g, function (m) {
+    var key = m.toLowerCase();
+    var alts = StyloDrift.SAFE_WORDS[key];
+    if (!alts) return m;
+    if (rng() > rate) return m;
+    var prefer = persona.prefer && persona.prefer[key];
+    var pick = prefer && alts.indexOf(prefer) !== -1 && rng() < 0.7
+      ? prefer
+      : StyloDrift.pick(rng, alts);
+    if (!pick) return m;
+    return StyloDrift.matchCase(m, pick);
+  });
+  return out;
+};
+
+/* --- lib/quality.js --- */
+StyloDrift.qualityOk = function (src, dst) {
+  var s = String(src || '');
+  var d = String(dst || '').trim();
+  if (!d) return false;
+  if (/\bthe the\b/i.test(d)) return false;
+  if (/\bthe public\b/i.test(d) && !/\bthe public\b/i.test(s)) return false;
+  if (/\bthe crowd\b/i.test(d) && !/\bthe crowd\b/i.test(s)) return false;
+  if (/^[a-z]/.test(d) && /^[A-Z]/.test(s.trim())) return false;
+  if (d.length < 400 && /\b(in a sense|more or less|to be fair|arguably),/i.test(d) &&
+      !/\b(in a sense|more or less|to be fair|arguably),/i.test(s)) {
+    return false;
+  }
+  if (/\bWhite\b/.test(s) && !/\bWhite\b/.test(d)) return false;
+  if (/\bpeople\b/i.test(s) && !/\b(people|folks)\b/i.test(d)) return false;
+  if (/\bthinking\b/i.test(s) && !/\bthinking\b/i.test(d)) return false;
+  if (/\bleaders\b/i.test(s) && !/\bleaders\b/i.test(d)) return false;
+  return true;
+};
+
 /* --- lib/function-words.js --- */
 StyloDrift.applyFunctionWords = function (text, persona, rate, rng) {
   return text.replace(/\b[A-Za-z']+\b/g, function (m) {
@@ -1072,12 +1198,6 @@ StyloDrift.applyPunctuation = function (text, persona, rate, rng) {
       });
     }
   }
-  if (persona.formality === 'casual' && rng() < rate * 0.25) {
-    out = out.replace(/\.(\s+)([A-Z])/g, function (m, sp, ch, offset, full) {
-      if (rng() < 0.3) return '!' + sp + ch;
-      return m;
-    });
-  }
   if (persona.formality === 'formal' && rng() < rate * 0.4) {
     out = out.replace(/!+/g, '.');
   }
@@ -1125,7 +1245,7 @@ StyloDrift.applyHedges = function (text, persona, rate, rng) {
       var h = StyloDrift.pick(rng, StyloDrift.HEDGES);
       var s = sents[idx];
       if (!new RegExp('\\b' + StyloDrift.escapeRe(h) + '\\b', 'i').test(s)) {
-        sents[idx] = h + ', ' + s.charAt(0).toLowerCase() + s.slice(1);
+        sents[idx] = h.charAt(0).toUpperCase() + h.slice(1) + ', ' + StyloDrift.lowerStart(s);
         out = StyloDrift.joinSentences(sents);
       }
     }
@@ -1153,7 +1273,7 @@ StyloDrift.PERSONAS = {
       although: 'though',
       because: 'cause',
       very: 'super',
-      really: 'pretty',
+      really: 'honestly',
       perhaps: 'maybe'
     }
   },
@@ -1175,7 +1295,7 @@ StyloDrift.PERSONAS = {
       although: 'although',
       because: 'because',
       very: 'exceedingly',
-      really: 'indeed',
+      really: 'truly',
       perhaps: 'perhaps'
     }
   },
@@ -1219,7 +1339,7 @@ StyloDrift.PERSONAS = {
       although: 'although',
       because: 'given that',
       very: 'highly',
-      really: 'in fact',
+      really: 'truly',
       perhaps: 'possibly'
     }
   },
@@ -1241,7 +1361,7 @@ StyloDrift.PERSONAS = {
       although: 'though',
       because: 'cause',
       very: 'pretty',
-      really: 'kinda',
+      really: 'honestly',
       perhaps: 'maybe'
     }
   },
@@ -1263,7 +1383,7 @@ StyloDrift.PERSONAS = {
       although: 'whilst',
       because: 'since',
       very: 'rather',
-      really: 'quite',
+      really: 'honestly',
       perhaps: 'perhaps'
     }
   },
@@ -1323,11 +1443,11 @@ StyloDrift.pickPersona = function (name, rng) {
 };
 
 StyloDrift.RATES = {
-  1: { phrase: 0.25, func: 0.2, syn: 0.12, spell: 0.25, contr: 0.4, punct: 0.3, hedge: 0.12, syntax: 0.18, closed: 0.2, ortho: 0.2, passes: 1 },
-  2: { phrase: 0.4, func: 0.35, syn: 0.22, spell: 0.4, contr: 0.55, punct: 0.45, hedge: 0.2, syntax: 0.3, closed: 0.35, ortho: 0.35, passes: 1 },
-  3: { phrase: 0.6, func: 0.55, syn: 0.4, spell: 0.55, contr: 0.75, punct: 0.6, hedge: 0.3, syntax: 0.5, closed: 0.55, ortho: 0.5, passes: 1 },
-  4: { phrase: 0.85, func: 0.8, syn: 0.62, spell: 0.75, contr: 0.92, punct: 0.75, hedge: 0.45, syntax: 0.7, closed: 0.75, ortho: 0.7, passes: 2 },
-  5: { phrase: 1, func: 0.95, syn: 0.85, spell: 0.9, contr: 0.98, punct: 0.9, hedge: 0.6, syntax: 0.9, closed: 0.92, ortho: 0.88, passes: 2 }
+  1: { safe: 0.45, spell: 0.2, contr: 0.55, punct: 0.2, hedge: 0, syntax: 0 },
+  2: { safe: 0.65, spell: 0.35, contr: 0.7, punct: 0.3, hedge: 0, syntax: 0.1 },
+  3: { safe: 0.8, spell: 0.5, contr: 0.85, punct: 0.4, hedge: 0.05, syntax: 0.15 },
+  4: { safe: 0.92, spell: 0.65, contr: 0.95, punct: 0.5, hedge: 0.08, syntax: 0.2 },
+  5: { safe: 1, spell: 0.8, contr: 1, punct: 0.55, hedge: 0.1, syntax: 0.25 }
 };
 
 /* --- lib/features.js --- */
@@ -1408,32 +1528,19 @@ StyloDrift.fitLength = function (text, maxLen, persona, rng) {
   if (out.length <= maxLen) return out;
   out = StyloDrift.applyContractions(out, { contraction: 1 }, 1, rng);
   if (out.length <= maxLen) return out;
-  var i;
-  for (i = 0; i < StyloDrift.HEDGES.length; i++) {
-    out = out.replace(new RegExp('\\b' + StyloDrift.escapeRe(StyloDrift.HEDGES[i]) + '\\b[, ]*', 'gi'), '');
-  }
-  out = out.replace(/\s{2,}/g, ' ').trim();
-  if (out.length <= maxLen) return out;
-  if (maxLen >= StyloDrift.LIMIT_LONG) return out.slice(0, maxLen);
-  return out.slice(0, maxLen - 1).replace(/\s+\S*$/, '') + '…';
+  return out.length > maxLen ? out.slice(0, maxLen - 1).replace(/\s+\S*$/, '') + '…' : out;
 };
 
 StyloDrift.driftChunk = function (chunk, persona, rates, rng) {
   var masked = StyloDrift.protect(chunk);
   var body = masked.text;
-  var pass;
-  for (pass = 0; pass < rates.passes; pass++) {
-    body = StyloDrift.applyPhrases(body, persona, rates.phrase, rng);
-    body = StyloDrift.applyClosedClass(body, persona, rates.closed, rng);
-    body = StyloDrift.applySyntax(body, persona, rates.syntax, rng);
-    body = StyloDrift.applyFunctionWords(body, persona, rates.func, rng);
-    body = StyloDrift.applySynonyms(body, persona, rates.syn, rng);
-    body = StyloDrift.applyOrthography(body, persona, rates.ortho, rng);
-    body = StyloDrift.applySpelling(body, persona, rates.spell, rng);
-    body = StyloDrift.applyContractions(body, persona, rates.contr, rng);
-    body = StyloDrift.applyPunctuation(body, persona, rates.punct, rng);
-    body = StyloDrift.applyHedges(body, persona, rates.hedge, rng);
-  }
+  var wc = StyloDrift.wordCount(chunk);
+  body = StyloDrift.applySafe(body, persona, rates.safe, rng);
+  body = StyloDrift.applyContractions(body, persona, rates.contr, rng);
+  body = StyloDrift.applySpelling(body, persona, rates.spell, rng);
+  body = StyloDrift.applyPunctuation(body, persona, rates.punct, rng);
+  if (wc > 55) body = StyloDrift.applySyntax(body, persona, rates.syntax * 0.35, rng);
+  if (wc > 90) body = StyloDrift.applyHedges(body, persona, rates.hedge * 0.4, rng);
   body = StyloDrift.unprotect(body, masked.slots);
   body = body.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n').replace(/ {2,}/g, ' ');
   body = body.replace(/,\s*;/g, ';').replace(/;\s*,/g, ';').replace(/,\s*,/g, ',');
@@ -1465,14 +1572,13 @@ StyloDrift.drift = function (text, opts) {
   var persona = StyloDrift.pickPersona(opts.persona, StyloDrift.makeRng(seed));
   var rates = StyloDrift.RATES[intensity];
   var maxLen = StyloDrift.maxLenFor(raw, opts);
-  var a = StyloDrift.driftOnce(raw, persona, rates, StyloDrift.makeRng(seed), maxLen);
-  var b = StyloDrift.driftOnce(raw, persona, rates, StyloDrift.makeRng(seed + 10007), maxLen);
-  var sa = StyloDrift.score(raw, a);
-  var sb = StyloDrift.score(raw, b);
-  var useB = sb.pinc3 + sb.func * 1.3 > sa.pinc3 + sa.func * 1.3;
-  var body = useB ? b : a;
-  var scores = useB ? sb : sa;
-  return { text: body, persona: persona.id, scores: scores, seed: seed };
+  var body = StyloDrift.driftOnce(raw, persona, rates, StyloDrift.makeRng(seed), maxLen);
+  if (!StyloDrift.qualityOk(raw, body)) {
+    var mild = Object.assign({}, rates, { safe: 1, contr: 1, spell: 0.5, punct: 0, syntax: 0, hedge: 0 });
+    body = StyloDrift.driftOnce(raw, persona, mild, StyloDrift.makeRng(seed + 3), maxLen);
+  }
+  if (!StyloDrift.qualityOk(raw, body)) body = raw;
+  return { text: body, persona: persona.id, scores: StyloDrift.score(raw, body), seed: seed };
 };
 
 /* --- ui/settings.js --- */

@@ -1,0 +1,61 @@
+StyloDrift.SAFE_PHRASES = {
+  "i really don't know": [
+    "i honestly don't know",
+    "i don't really know",
+    "i truly don't know"
+  ],
+  'i really do not know': [
+    'i honestly do not know',
+    'i do not really know',
+    'i truly do not know'
+  ],
+  "i don't know": ["i do not know", "i have no idea", "i've no idea"],
+  'i do not know': ["i don't know", 'i have no idea'],
+  'it seems like': ['it looks like', 'it appears that'],
+  'it seems that': ['it looks like', 'it appears that'],
+  'it seems': ['it appears', 'it looks'],
+  'seems like': ['looks like', 'appears that'],
+  'fully focused': ['completely focused', 'entirely focused'],
+  'these days': ['lately', 'recently'],
+  'at the moment': ['right now', 'just now'],
+  'a lot of': ['plenty of', 'lots of'],
+  'lots of': ['a lot of', 'plenty of'],
+  'kind of': ['sort of', 'somewhat'],
+  'sort of': ['kind of', 'somewhat'],
+  'going to': ['about to'],
+  'have to': ['need to'],
+  'need to': ['have to'],
+  'in order to': ['to'],
+  'due to the fact that': ['because'],
+  'at this point': ['now'],
+  'as well': ['too']
+};
+
+StyloDrift.SAFE_WORDS = {
+  really: ['honestly', 'truly', 'actually'],
+  actually: ['really', 'in fact'],
+  honestly: ['truly', 'really'],
+  lately: ['recently'],
+  recently: ['lately'],
+  fully: ['completely', 'entirely'],
+  completely: ['fully', 'entirely'],
+  entirely: ['fully', 'completely'],
+  seems: ['appears'],
+  appears: ['seems'],
+  maybe: ['perhaps', 'possibly'],
+  perhaps: ['maybe', 'possibly'],
+  possibly: ['perhaps', 'maybe'],
+  these: ['those'],
+  those: ['these'],
+  towards: ['toward'],
+  toward: ['towards'],
+  among: ['amongst'],
+  amongst: ['among'],
+  while: ['whilst'],
+  whilst: ['while'],
+  because: ['since'],
+  since: ['because'],
+  although: ['though', 'even though'],
+  though: ['although'],
+  however: ['still', 'even so']
+};
