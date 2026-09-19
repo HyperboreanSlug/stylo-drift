@@ -9,7 +9,7 @@ HEADER = """\
 // ==UserScript==
 // @name         Stylo Drift
 // @namespace    local.stylo-drift
-// @version      1.1.0
+// @version      1.2.0
 // @description  Rewrite compose text on X to shift writing-style features
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -23,8 +23,8 @@ HEADER = """\
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
+// @grant        unsafeWindow
 // @run-at       document-idle
-// @noframes
 // ==/UserScript==
 """
 
@@ -56,6 +56,7 @@ UI = [
     "ui/settings.js",
     "ui/composer.js",
     "ui/panel.js",
+    "ui/hud.js",
     "ui/toolbar.js",
     "ui/intercept.js",
     "ui/main.js",

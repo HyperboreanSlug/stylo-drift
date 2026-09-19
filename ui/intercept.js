@@ -20,23 +20,31 @@ StyloDrift.rewriteAllOpen = function () {
   return last;
 };
 
-StyloDrift.armIntercept = function () {
-  document.addEventListener('click', function (e) {
-    if (StyloDrift._posting) return;
-    if (!StyloDrift.settings.enabled || !StyloDrift.settings.auto) return;
-    var btn = StyloDrift._isPostButton(e.target);
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    StyloDrift.rewriteAllOpen();
-    StyloDrift._posting = true;
+StyloDrift._guardPost = function (e) {
+  if (StyloDrift._posting) return false;
+  if (!StyloDrift.settings.enabled || !StyloDrift.settings.auto) return false;
+  var btn = StyloDrift._isPostButton(e.target);
+  if (!btn) return false;
+  if (btn.getAttribute('aria-disabled') === 'true') return false;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  StyloDrift.rewriteAllOpen();
+  StyloDrift._posting = true;
+  setTimeout(function () {
+    btn.click();
     setTimeout(function () {
-      btn.click();
-      setTimeout(function () {
-        StyloDrift._posting = false;
-      }, 400);
-    }, 40);
+      StyloDrift._posting = false;
+    }, 500);
+  }, 80);
+  return true;
+};
+
+StyloDrift.armIntercept = function () {
+  document.addEventListener('click', StyloDrift._guardPost, true);
+  document.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    StyloDrift._guardPost(e);
   }, true);
 
   document.addEventListener('keydown', function (e) {

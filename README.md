@@ -4,6 +4,8 @@
 
 Firefox: Greasemonkey or Violentmonkey first, then the install link. The manager prompts automatically.
 
+On `x.com` a **Stylo Drift** chip sits at the bottom right. If that chip is missing, the script is not running on the page (enable it for x.com in the monkey menu, then refresh). Type a post, click **Drift** on the chip.
+
 Greasemonkey userscript. Rewrites compose/reply text on X so function-word rates, character n-grams, punctuation, contractions, spelling, and sentence length move away from your baseline.
 
 Compute: the X tab’s JavaScript. No GPU, no API, no local model. A tweet rewrite is a few milliseconds of string passes.

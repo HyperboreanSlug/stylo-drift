@@ -53,6 +53,7 @@ build.py       concatenates modules into stylo-drift.user.js
 | `ui/settings.js` | Load/save options | Greasemonkey storage with fallbacks |
 | `ui/composer.js` | Find, read, fill X editor | Lexical contenteditable I/O |
 | `ui/panel.js` | Settings drawer | Intensity, persona, auto-on-post |
+| `ui/hud.js` | Fixed overlay controls | Survives React wiping the compose toolbar |
 | `ui/toolbar.js` | Drift / Undo on the compose bar | Manual reroll |
 | `ui/intercept.js` | Rewrite before Post / Ctrl+Enter | Default path so style does not leak |
 | `ui/main.js` | MutationObserver bootstrap | SPA-safe inject |

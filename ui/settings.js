@@ -46,11 +46,19 @@ StyloDrift._storeSet = function (key, value) {
 StyloDrift.settings = Object.assign({}, StyloDrift.DEFAULTS);
 
 StyloDrift.loadSettings = function () {
-  return StyloDrift._storeGet('sd-settings', StyloDrift.DEFAULTS).then(function (raw) {
+  var loaded = StyloDrift._storeGet('sd-settings', StyloDrift.DEFAULTS).then(function (raw) {
     var s = raw && typeof raw === 'object' ? raw : {};
     StyloDrift.settings = Object.assign({}, StyloDrift.DEFAULTS, s);
     return StyloDrift.settings;
+  }).catch(function () {
+    return StyloDrift.settings;
   });
+  return Promise.race([
+    loaded,
+    new Promise(function (resolve) {
+      setTimeout(function () { resolve(StyloDrift.settings); }, 300);
+    })
+  ]);
 };
 
 StyloDrift.saveSettings = function () {

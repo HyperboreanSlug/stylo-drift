@@ -48,12 +48,19 @@ StyloDrift.injectToolbar = function (composer) {
   wrap.appendChild(undoBtn);
   wrap.appendChild(score);
   bar.insertBefore(wrap, bar.firstChild);
-  driftBtn.addEventListener('click', function (e) {
+  function stop(e) {
     e.preventDefault();
     e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+  wrap.addEventListener('mousedown', stop, true);
+  wrap.addEventListener('pointerdown', stop, true);
+  driftBtn.addEventListener('click', function (e) {
+    stop(e);
     if (!StyloDrift.settings.enabled) return;
     var res = StyloDrift.driftComposer(composer);
     if (res && StyloDrift.settings.showScore) score.textContent = StyloDrift._formatScore(res);
+    if (res) StyloDrift.updateHud(StyloDrift._formatScore(res));
   });
   undoBtn.addEventListener('click', function (e) {
     e.preventDefault();
@@ -65,6 +72,7 @@ StyloDrift.injectToolbar = function (composer) {
 
 StyloDrift.scan = function () {
   StyloDrift.injectCss();
+  StyloDrift.injectHud();
   var list = StyloDrift.findComposers(document);
   var i;
   for (i = 0; i < list.length; i++) StyloDrift.injectToolbar(list[i]);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Stylo Drift
 // @namespace    local.stylo-drift
-// @version      1.1.0
+// @version      1.2.0
 // @description  Rewrite compose text on X to shift writing-style features
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -15,8 +15,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
+// @grant        unsafeWindow
 // @run-at       document-idle
-// @noframes
 // ==/UserScript==
 
 (function () {
@@ -1524,11 +1524,19 @@ StyloDrift._storeSet = function (key, value) {
 StyloDrift.settings = Object.assign({}, StyloDrift.DEFAULTS);
 
 StyloDrift.loadSettings = function () {
-  return StyloDrift._storeGet('sd-settings', StyloDrift.DEFAULTS).then(function (raw) {
+  var loaded = StyloDrift._storeGet('sd-settings', StyloDrift.DEFAULTS).then(function (raw) {
     var s = raw && typeof raw === 'object' ? raw : {};
     StyloDrift.settings = Object.assign({}, StyloDrift.DEFAULTS, s);
     return StyloDrift.settings;
+  }).catch(function () {
+    return StyloDrift.settings;
   });
+  return Promise.race([
+    loaded,
+    new Promise(function (resolve) {
+      setTimeout(function () { resolve(StyloDrift.settings); }, 300);
+    })
+  ]);
 };
 
 StyloDrift.saveSettings = function () {
@@ -1536,6 +1544,13 @@ StyloDrift.saveSettings = function () {
 };
 
 /* --- ui/composer.js --- */
+StyloDrift.pageWin = function () {
+  try {
+    if (typeof unsafeWindow !== 'undefined' && unsafeWindow) return unsafeWindow;
+  } catch (e) {}
+  return window;
+};
+
 StyloDrift.composerEl = function (node) {
   if (!node) return null;
   if (node.getAttribute && node.getAttribute('contenteditable') === 'true') return node;
@@ -1545,17 +1560,22 @@ StyloDrift.composerEl = function (node) {
 
 StyloDrift.findComposers = function (root) {
   var base = root || document;
-  var nodes = base.querySelectorAll('[data-testid^="tweetTextarea_"]');
+  var sel =
+    '[data-testid^="tweetTextarea_"], [data-testid="dmComposerTextInput"], ' +
+    '[aria-label="Post text"], [aria-label="Tweet text"], [aria-label="Reply"]';
+  var nodes = base.querySelectorAll(sel);
   var out = [];
   var i;
   for (i = 0; i < nodes.length; i++) {
     var el = StyloDrift.composerEl(nodes[i]);
     if (el && out.indexOf(el) === -1) out.push(el);
   }
-  var dm = base.querySelectorAll('[data-testid="dmComposerTextInput"]');
-  for (i = 0; i < dm.length; i++) {
-    var d = StyloDrift.composerEl(dm[i]);
-    if (d && out.indexOf(d) === -1) out.push(d);
+  var boxes = base.querySelectorAll('[role="textbox"][contenteditable="true"]');
+  for (i = 0; i < boxes.length; i++) {
+    var b = boxes[i];
+    if (b.closest && b.closest('[data-testid="SearchBox_Search_Input"]')) continue;
+    if (b.getAttribute('data-testid') && /search/i.test(b.getAttribute('data-testid'))) continue;
+    if (out.indexOf(b) === -1) out.push(b);
   }
   return out;
 };
@@ -1566,29 +1586,64 @@ StyloDrift.readComposer = function (el) {
   return (ed.innerText || ed.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
 };
 
+StyloDrift._selectAll = function (ed) {
+  var win = StyloDrift.pageWin();
+  var doc = ed.ownerDocument;
+  ed.focus();
+  try {
+    var sel = (win.getSelection && win.getSelection()) || doc.getSelection();
+    var range = doc.createRange();
+    range.selectNodeContents(ed);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (e) {}
+  try {
+    doc.execCommand('selectAll', false, null);
+  } catch (e2) {}
+};
+
 StyloDrift.writeComposer = function (el, text) {
   var ed = StyloDrift.composerEl(el);
   if (!ed) return;
-  ed.focus();
-  var sel = window.getSelection();
-  var range = document.createRange();
-  range.selectNodeContents(ed);
-  sel.removeAllRanges();
-  sel.addRange(range);
+  var win = StyloDrift.pageWin();
+  var doc = ed.ownerDocument;
+  StyloDrift._selectAll(ed);
   var ok = false;
   try {
-    ok = document.execCommand('insertText', false, text);
+    ok = doc.execCommand('insertText', false, text);
   } catch (e) {}
-  if (!ok) {
-    ed.textContent = text;
-    ed.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
-  }
+  var now = StyloDrift.readComposer(ed);
+  if (ok && now && now.replace(/\s+/g, ' ').indexOf(String(text).slice(0, 24).replace(/\s+/g, ' ')) !== -1) return;
+  try {
+    var DT = win.DataTransfer || DataTransfer;
+    var CE = win.ClipboardEvent || ClipboardEvent;
+    var dt = new DT();
+    dt.setData('text/plain', text);
+    var ev = new CE('paste', { bubbles: true, cancelable: true });
+    try {
+      Object.defineProperty(ev, 'clipboardData', { value: dt });
+    } catch (e2) {}
+    ed.dispatchEvent(ev);
+  } catch (e3) {}
+  now = StyloDrift.readComposer(ed);
+  if (now && now.replace(/\s+/g, ' ').indexOf(String(text).slice(0, 24).replace(/\s+/g, ' ')) !== -1) return;
+  try {
+    ed.dispatchEvent(new InputEvent('beforeinput', {
+      bubbles: true, cancelable: true, inputType: 'insertText', data: text
+    }));
+    ed.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+  } catch (e4) {}
+  now = StyloDrift.readComposer(ed);
+  if (now && now.replace(/\s+/g, ' ').indexOf(String(text).slice(0, 24).replace(/\s+/g, ' ')) !== -1) return;
+  while (ed.firstChild) ed.removeChild(ed.firstChild);
+  ed.appendChild(doc.createTextNode(text));
+  ed.dispatchEvent(new Event('input', { bubbles: true }));
 };
 
 StyloDrift.composerRoot = function (el) {
   var n = el;
   var i;
-  for (i = 0; i < 14 && n; i++) {
+  for (i = 0; i < 16 && n; i++) {
     if (n.querySelector && n.querySelector('[data-testid="toolBar"]')) return n;
     n = n.parentElement;
   }
@@ -1606,6 +1661,16 @@ StyloDrift.setState = function (el, st) {
   if (StyloDrift._state) StyloDrift._state.set(el, st);
 };
 
+StyloDrift.activeComposer = function () {
+  var a = document.activeElement;
+  if (a) {
+    var box = a.closest && a.closest('[data-testid^="tweetTextarea_"], [contenteditable="true"]');
+    if (box) return StyloDrift.composerEl(box);
+  }
+  var list = StyloDrift.findComposers(document);
+  return list.length ? list[0] : null;
+};
+
 /* --- ui/panel.js --- */
 StyloDrift.injectCss = function () {
   if (document.getElementById('sd-style')) return;
@@ -1616,7 +1681,9 @@ StyloDrift.injectCss = function () {
     '.sd-btn:hover{background:rgba(29,155,240,0.1)}',
     '.sd-score{font-size:11px;color:#8b98a5;margin-right:8px;white-space:nowrap}',
     '.sd-wrap{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:4px 8px}',
-    '.sd-panel{position:fixed;right:16px;bottom:16px;z-index:999999;width:280px;background:#15202b;color:#e7e9ea;border:1px solid #38444d;border-radius:12px;padding:14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.4)}',
+    '#sd-hud{position:fixed;right:16px;bottom:72px;z-index:2147483646;display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:min(420px,calc(100vw - 24px));background:#15202b;color:#e7e9ea;border:1px solid #1d9bf0;border-radius:12px;padding:8px 10px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.45)}',
+    '#sd-hud strong{margin-right:4px}',
+    '.sd-panel{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:280px;background:#15202b;color:#e7e9ea;border:1px solid #38444d;border-radius:12px;padding:14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.4)}',
     '.sd-panel h2{margin:0 0 10px;font-size:16px}',
     '.sd-panel label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;flex-wrap:wrap}',
     '.sd-panel select,.sd-panel input[type=range]{flex:1;min-width:120px}',
@@ -1673,6 +1740,59 @@ StyloDrift.togglePanel = function () {
   });
 };
 
+/* --- ui/hud.js --- */
+StyloDrift.injectHud = function () {
+  if (document.getElementById('sd-hud')) return;
+  var hud = document.createElement('div');
+  hud.id = 'sd-hud';
+  hud.innerHTML =
+    '<strong>Stylo Drift</strong>' +
+    '<button type="button" class="sd-btn" id="sd-hud-drift">Drift</button>' +
+    '<button type="button" class="sd-btn" id="sd-hud-undo">Undo</button>' +
+    '<button type="button" class="sd-btn" id="sd-hud-cfg">Settings</button>' +
+    '<span class="sd-score" id="sd-hud-score">on</span>';
+  document.documentElement.appendChild(hud);
+  function swallow(e) {
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+  hud.addEventListener('mousedown', swallow, true);
+  hud.addEventListener('pointerdown', swallow, true);
+  function stop(e) {
+    e.preventDefault();
+    swallow(e);
+  }
+  document.getElementById('sd-hud-drift').addEventListener('click', function (e) {
+    stop(e);
+    var el = StyloDrift.activeComposer();
+    if (!el) {
+      document.getElementById('sd-hud-score').textContent = 'no composer';
+      return;
+    }
+    var res = StyloDrift.driftComposer(el);
+    document.getElementById('sd-hud-score').textContent = res
+      ? StyloDrift._formatScore(res)
+      : 'empty box';
+  });
+  document.getElementById('sd-hud-undo').addEventListener('click', function (e) {
+    stop(e);
+    var el = StyloDrift.activeComposer();
+    if (el) StyloDrift.undoComposer(el);
+    document.getElementById('sd-hud-score').textContent = 'undone';
+  });
+  document.getElementById('sd-hud-cfg').addEventListener('click', function (e) {
+    stop(e);
+    StyloDrift.togglePanel();
+  });
+};
+
+StyloDrift.updateHud = function (msg) {
+  var el = document.getElementById('sd-hud-score');
+  if (!el) return;
+  if (msg) el.textContent = msg;
+  else el.textContent = StyloDrift.settings.enabled ? 'on' : 'off';
+};
+
 /* --- ui/toolbar.js --- */
 StyloDrift._formatScore = function (res) {
   if (!res || !res.scores) return '';
@@ -1724,12 +1844,19 @@ StyloDrift.injectToolbar = function (composer) {
   wrap.appendChild(undoBtn);
   wrap.appendChild(score);
   bar.insertBefore(wrap, bar.firstChild);
-  driftBtn.addEventListener('click', function (e) {
+  function stop(e) {
     e.preventDefault();
     e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+  wrap.addEventListener('mousedown', stop, true);
+  wrap.addEventListener('pointerdown', stop, true);
+  driftBtn.addEventListener('click', function (e) {
+    stop(e);
     if (!StyloDrift.settings.enabled) return;
     var res = StyloDrift.driftComposer(composer);
     if (res && StyloDrift.settings.showScore) score.textContent = StyloDrift._formatScore(res);
+    if (res) StyloDrift.updateHud(StyloDrift._formatScore(res));
   });
   undoBtn.addEventListener('click', function (e) {
     e.preventDefault();
@@ -1741,6 +1868,7 @@ StyloDrift.injectToolbar = function (composer) {
 
 StyloDrift.scan = function () {
   StyloDrift.injectCss();
+  StyloDrift.injectHud();
   var list = StyloDrift.findComposers(document);
   var i;
   for (i = 0; i < list.length; i++) StyloDrift.injectToolbar(list[i]);
@@ -1769,23 +1897,31 @@ StyloDrift.rewriteAllOpen = function () {
   return last;
 };
 
-StyloDrift.armIntercept = function () {
-  document.addEventListener('click', function (e) {
-    if (StyloDrift._posting) return;
-    if (!StyloDrift.settings.enabled || !StyloDrift.settings.auto) return;
-    var btn = StyloDrift._isPostButton(e.target);
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    StyloDrift.rewriteAllOpen();
-    StyloDrift._posting = true;
+StyloDrift._guardPost = function (e) {
+  if (StyloDrift._posting) return false;
+  if (!StyloDrift.settings.enabled || !StyloDrift.settings.auto) return false;
+  var btn = StyloDrift._isPostButton(e.target);
+  if (!btn) return false;
+  if (btn.getAttribute('aria-disabled') === 'true') return false;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  StyloDrift.rewriteAllOpen();
+  StyloDrift._posting = true;
+  setTimeout(function () {
+    btn.click();
     setTimeout(function () {
-      btn.click();
-      setTimeout(function () {
-        StyloDrift._posting = false;
-      }, 400);
-    }, 40);
+      StyloDrift._posting = false;
+    }, 500);
+  }, 80);
+  return true;
+};
+
+StyloDrift.armIntercept = function () {
+  document.addEventListener('click', StyloDrift._guardPost, true);
+  document.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    StyloDrift._guardPost(e);
   }, true);
 
   document.addEventListener('keydown', function (e) {
@@ -1818,30 +1954,42 @@ StyloDrift.armIntercept = function () {
 
 /* --- ui/main.js --- */
 StyloDrift.start = function () {
-  StyloDrift.loadSettings().then(function () {
-    StyloDrift.injectCss();
-    StyloDrift.armIntercept();
-    StyloDrift.scan();
-    var obs = new MutationObserver(function () {
+  if (StyloDrift._started) return;
+  StyloDrift._started = true;
+  StyloDrift.injectCss();
+  StyloDrift.injectHud();
+  StyloDrift.armIntercept();
+  StyloDrift.scan();
+  var t = 0;
+  var obs = new MutationObserver(function () {
+    if (t) return;
+    t = 1;
+    setTimeout(function () {
+      t = 0;
       StyloDrift.scan();
-    });
-    obs.observe(document.documentElement, { childList: true, subtree: true });
-    try {
-      var menu = typeof GM !== 'undefined' && GM.registerMenuCommand
-        ? GM.registerMenuCommand
-        : (typeof GM_registerMenuCommand === 'function' ? GM_registerMenuCommand : null);
-      if (menu) {
-        menu('Stylo Drift: settings', StyloDrift.togglePanel);
-        menu('Stylo Drift: toggle auto', function () {
-          StyloDrift.settings.auto = !StyloDrift.settings.auto;
-          StyloDrift.saveSettings();
-        });
-      }
-    } catch (e) {}
+    }, 80);
   });
+  obs.observe(document.documentElement, { childList: true, subtree: true });
+  StyloDrift.loadSettings().then(function () {
+    StyloDrift.updateHud();
+    StyloDrift.scan();
+  });
+  try {
+    var menu = typeof GM !== 'undefined' && GM.registerMenuCommand
+      ? GM.registerMenuCommand
+      : (typeof GM_registerMenuCommand === 'function' ? GM_registerMenuCommand : null);
+    if (menu) {
+      menu('Stylo Drift: settings', StyloDrift.togglePanel);
+      menu('Stylo Drift: toggle auto', function () {
+        StyloDrift.settings.auto = !StyloDrift.settings.auto;
+        StyloDrift.saveSettings();
+        StyloDrift.updateHud(StyloDrift.settings.auto ? 'auto on' : 'auto off');
+      });
+    }
+  } catch (e) {}
 };
 
-if (typeof document !== 'undefined' && document.documentElement) {
+if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', StyloDrift.start);
   } else {
