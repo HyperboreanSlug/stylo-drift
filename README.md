@@ -4,7 +4,7 @@
 
 Firefox: Greasemonkey or Violentmonkey first, then the install link. The manager prompts automatically.
 
-On `x.com` a **Stylo Drift** chip sits at the bottom right. If that chip is missing, the script is not running on the page (enable it for x.com in the monkey menu, then refresh). Type a post, click **Drift** on the chip.
+On `x.com` a **Stylo Drift** chip sits at the bottom right. If that chip is missing, the script is not running on the page (enable it for x.com in the monkey menu, then refresh). Type a post (including quote tweets and replies), click **Drift** on the chip.
 
 Greasemonkey userscript. Rewrites compose/reply text on X so function-word rates, character n-grams, punctuation, contractions, spelling, and sentence length move away from your baseline.
 

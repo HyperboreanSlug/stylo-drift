@@ -4,6 +4,12 @@ StyloDrift.start = function () {
   StyloDrift.injectCss();
   StyloDrift.injectHud();
   StyloDrift.armIntercept();
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var box = t.closest('[data-testid^="tweetTextarea_"], [role="textbox"][contenteditable="true"]');
+    if (box) StyloDrift.trackComposer(box);
+  }, true);
   StyloDrift.scan();
   var t = 0;
   var obs = new MutationObserver(function () {

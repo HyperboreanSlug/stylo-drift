@@ -12,25 +12,43 @@ StyloDrift.composerEl = function (node) {
   return inner || node;
 };
 
+StyloDrift.isVisible = function (el) {
+  if (!el || !el.getBoundingClientRect) return false;
+  var r = el.getBoundingClientRect();
+  return r.width > 1 && r.height > 1;
+};
+
+StyloDrift.composeScope = function () {
+  var dialogs = document.querySelectorAll('[role="dialog"]');
+  var i;
+  for (i = 0; i < dialogs.length; i++) {
+    var d = dialogs[i];
+    if (d.querySelector('[data-testid^="tweetTextarea_"], [role="textbox"][contenteditable="true"]')) {
+      return d;
+    }
+  }
+  return document;
+};
+
 StyloDrift.findComposers = function (root) {
-  var base = root || document;
+  var base = root || StyloDrift.composeScope();
   var sel =
     '[data-testid^="tweetTextarea_"], [data-testid="dmComposerTextInput"], ' +
-    '[aria-label="Post text"], [aria-label="Tweet text"], [aria-label="Reply"]';
+    '[aria-label="Post text"], [aria-label="Tweet text"], [aria-label="Reply"], ' +
+    '[aria-label="Add a comment"], [aria-label="Quote"], [aria-label="What is happening?!"], ' +
+    '[aria-label="What\'s happening?"], [aria-label="Add another post"]';
   var nodes = base.querySelectorAll(sel);
   var out = [];
   var i;
-  for (i = 0; i < nodes.length; i++) {
-    var el = StyloDrift.composerEl(nodes[i]);
-    if (el && out.indexOf(el) === -1) out.push(el);
+  function add(el) {
+    var ed = StyloDrift.composerEl(el);
+    if (!ed || !StyloDrift.isVisible(ed)) return;
+    if (ed.closest && ed.closest('[data-testid="SearchBox_Search_Input"]')) return;
+    if (out.indexOf(ed) === -1) out.push(ed);
   }
+  for (i = 0; i < nodes.length; i++) add(nodes[i]);
   var boxes = base.querySelectorAll('[role="textbox"][contenteditable="true"]');
-  for (i = 0; i < boxes.length; i++) {
-    var b = boxes[i];
-    if (b.closest && b.closest('[data-testid="SearchBox_Search_Input"]')) continue;
-    if (b.getAttribute('data-testid') && /search/i.test(b.getAttribute('data-testid'))) continue;
-    if (out.indexOf(b) === -1) out.push(b);
-  }
+  for (i = 0; i < boxes.length; i++) add(boxes[i]);
   return out;
 };
 
@@ -115,12 +133,28 @@ StyloDrift.setState = function (el, st) {
   if (StyloDrift._state) StyloDrift._state.set(el, st);
 };
 
+StyloDrift._lastComposer = null;
+
+StyloDrift.trackComposer = function (el) {
+  var ed = StyloDrift.composerEl(el);
+  if (ed && StyloDrift.isVisible(ed)) StyloDrift._lastComposer = ed;
+};
+
 StyloDrift.activeComposer = function () {
+  var last = StyloDrift._lastComposer;
+  if (last && last.isConnected && StyloDrift.isVisible(last)) return last;
   var a = document.activeElement;
-  if (a) {
-    var box = a.closest && a.closest('[data-testid^="tweetTextarea_"], [contenteditable="true"]');
-    if (box) return StyloDrift.composerEl(box);
+  if (a && a.closest) {
+    var box = a.closest('[data-testid^="tweetTextarea_"], [role="textbox"][contenteditable="true"]');
+    if (box) {
+      var ed = StyloDrift.composerEl(box);
+      if (ed && StyloDrift.isVisible(ed)) return ed;
+    }
   }
-  var list = StyloDrift.findComposers(document);
+  var list = StyloDrift.findComposers();
+  var i;
+  for (i = 0; i < list.length; i++) {
+    if (StyloDrift.readComposer(list[i]).trim()) return list[i];
+  }
   return list.length ? list[0] : null;
 };

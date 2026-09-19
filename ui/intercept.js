@@ -6,7 +6,7 @@ StyloDrift._isPostButton = function (el) {
 };
 
 StyloDrift.rewriteAllOpen = function () {
-  var list = StyloDrift.findComposers(document);
+  var list = StyloDrift.findComposers();
   var i;
   var last = null;
   for (i = 0; i < list.length; i++) {
@@ -52,24 +52,24 @@ StyloDrift.armIntercept = function () {
     if (!StyloDrift.settings.enabled) return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       if (!StyloDrift.settings.auto) return;
-      var active = document.activeElement;
-      if (!active || !active.closest('[data-testid^="tweetTextarea_"]')) return;
+      var box = StyloDrift.activeComposer();
+      if (!box) return;
       e.preventDefault();
       e.stopPropagation();
       StyloDrift.rewriteAllOpen();
       StyloDrift._posting = true;
-      var btn = document.querySelector('[data-testid="tweetButtonInline"], [data-testid="tweetButton"]');
+      var scope = StyloDrift.composeScope();
+      var btn = scope.querySelector('[data-testid="tweetButtonInline"], [data-testid="tweetButton"]');
       setTimeout(function () {
         if (btn) btn.click();
         setTimeout(function () { StyloDrift._posting = false; }, 400);
-      }, 40);
+      }, 80);
     }
     if (e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
-      var el = document.activeElement;
-      var box = el && el.closest && el.closest('[data-testid^="tweetTextarea_"]');
-      if (box) {
+      var el = StyloDrift.activeComposer();
+      if (el) {
         e.preventDefault();
-        StyloDrift.driftComposer(StyloDrift.composerEl(box));
+        StyloDrift.driftComposer(el);
       }
     }
   }, true);

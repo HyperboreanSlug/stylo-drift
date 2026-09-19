@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Stylo Drift
 // @namespace    local.stylo-drift
-// @version      1.3.0
+// @version      1.3.1
 // @description  Rewrite compose text on X to shift writing-style features
 // @match        https://x.com/*
 // @match        https://www.x.com/*
@@ -1664,25 +1664,43 @@ StyloDrift.composerEl = function (node) {
   return inner || node;
 };
 
+StyloDrift.isVisible = function (el) {
+  if (!el || !el.getBoundingClientRect) return false;
+  var r = el.getBoundingClientRect();
+  return r.width > 1 && r.height > 1;
+};
+
+StyloDrift.composeScope = function () {
+  var dialogs = document.querySelectorAll('[role="dialog"]');
+  var i;
+  for (i = 0; i < dialogs.length; i++) {
+    var d = dialogs[i];
+    if (d.querySelector('[data-testid^="tweetTextarea_"], [role="textbox"][contenteditable="true"]')) {
+      return d;
+    }
+  }
+  return document;
+};
+
 StyloDrift.findComposers = function (root) {
-  var base = root || document;
+  var base = root || StyloDrift.composeScope();
   var sel =
     '[data-testid^="tweetTextarea_"], [data-testid="dmComposerTextInput"], ' +
-    '[aria-label="Post text"], [aria-label="Tweet text"], [aria-label="Reply"]';
+    '[aria-label="Post text"], [aria-label="Tweet text"], [aria-label="Reply"], ' +
+    '[aria-label="Add a comment"], [aria-label="Quote"], [aria-label="What is happening?!"], ' +
+    '[aria-label="What\'s happening?"], [aria-label="Add another post"]';
   var nodes = base.querySelectorAll(sel);
   var out = [];
   var i;
-  for (i = 0; i < nodes.length; i++) {
-    var el = StyloDrift.composerEl(nodes[i]);
-    if (el && out.indexOf(el) === -1) out.push(el);
+  function add(el) {
+    var ed = StyloDrift.composerEl(el);
+    if (!ed || !StyloDrift.isVisible(ed)) return;
+    if (ed.closest && ed.closest('[data-testid="SearchBox_Search_Input"]')) return;
+    if (out.indexOf(ed) === -1) out.push(ed);
   }
+  for (i = 0; i < nodes.length; i++) add(nodes[i]);
   var boxes = base.querySelectorAll('[role="textbox"][contenteditable="true"]');
-  for (i = 0; i < boxes.length; i++) {
-    var b = boxes[i];
-    if (b.closest && b.closest('[data-testid="SearchBox_Search_Input"]')) continue;
-    if (b.getAttribute('data-testid') && /search/i.test(b.getAttribute('data-testid'))) continue;
-    if (out.indexOf(b) === -1) out.push(b);
-  }
+  for (i = 0; i < boxes.length; i++) add(boxes[i]);
   return out;
 };
 
@@ -1767,13 +1785,29 @@ StyloDrift.setState = function (el, st) {
   if (StyloDrift._state) StyloDrift._state.set(el, st);
 };
 
+StyloDrift._lastComposer = null;
+
+StyloDrift.trackComposer = function (el) {
+  var ed = StyloDrift.composerEl(el);
+  if (ed && StyloDrift.isVisible(ed)) StyloDrift._lastComposer = ed;
+};
+
 StyloDrift.activeComposer = function () {
+  var last = StyloDrift._lastComposer;
+  if (last && last.isConnected && StyloDrift.isVisible(last)) return last;
   var a = document.activeElement;
-  if (a) {
-    var box = a.closest && a.closest('[data-testid^="tweetTextarea_"], [contenteditable="true"]');
-    if (box) return StyloDrift.composerEl(box);
+  if (a && a.closest) {
+    var box = a.closest('[data-testid^="tweetTextarea_"], [role="textbox"][contenteditable="true"]');
+    if (box) {
+      var ed = StyloDrift.composerEl(box);
+      if (ed && StyloDrift.isVisible(ed)) return ed;
+    }
   }
-  var list = StyloDrift.findComposers(document);
+  var list = StyloDrift.findComposers();
+  var i;
+  for (i = 0; i < list.length; i++) {
+    if (StyloDrift.readComposer(list[i]).trim()) return list[i];
+  }
   return list.length ? list[0] : null;
 };
 
@@ -1859,6 +1893,7 @@ StyloDrift.injectHud = function () {
     '<span class="sd-score" id="sd-hud-score">on</span>';
   document.documentElement.appendChild(hud);
   function swallow(e) {
+    e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   }
@@ -1989,7 +2024,7 @@ StyloDrift._isPostButton = function (el) {
 };
 
 StyloDrift.rewriteAllOpen = function () {
-  var list = StyloDrift.findComposers(document);
+  var list = StyloDrift.findComposers();
   var i;
   var last = null;
   for (i = 0; i < list.length; i++) {
@@ -2035,24 +2070,24 @@ StyloDrift.armIntercept = function () {
     if (!StyloDrift.settings.enabled) return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       if (!StyloDrift.settings.auto) return;
-      var active = document.activeElement;
-      if (!active || !active.closest('[data-testid^="tweetTextarea_"]')) return;
+      var box = StyloDrift.activeComposer();
+      if (!box) return;
       e.preventDefault();
       e.stopPropagation();
       StyloDrift.rewriteAllOpen();
       StyloDrift._posting = true;
-      var btn = document.querySelector('[data-testid="tweetButtonInline"], [data-testid="tweetButton"]');
+      var scope = StyloDrift.composeScope();
+      var btn = scope.querySelector('[data-testid="tweetButtonInline"], [data-testid="tweetButton"]');
       setTimeout(function () {
         if (btn) btn.click();
         setTimeout(function () { StyloDrift._posting = false; }, 400);
-      }, 40);
+      }, 80);
     }
     if (e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
-      var el = document.activeElement;
-      var box = el && el.closest && el.closest('[data-testid^="tweetTextarea_"]');
-      if (box) {
+      var el = StyloDrift.activeComposer();
+      if (el) {
         e.preventDefault();
-        StyloDrift.driftComposer(StyloDrift.composerEl(box));
+        StyloDrift.driftComposer(el);
       }
     }
   }, true);
@@ -2065,6 +2100,12 @@ StyloDrift.start = function () {
   StyloDrift.injectCss();
   StyloDrift.injectHud();
   StyloDrift.armIntercept();
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var box = t.closest('[data-testid^="tweetTextarea_"], [role="textbox"][contenteditable="true"]');
+    if (box) StyloDrift.trackComposer(box);
+  }, true);
   StyloDrift.scan();
   var t = 0;
   var obs = new MutationObserver(function () {

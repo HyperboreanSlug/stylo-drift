@@ -10,6 +10,7 @@ StyloDrift.injectHud = function () {
     '<span class="sd-score" id="sd-hud-score">on</span>';
   document.documentElement.appendChild(hud);
   function swallow(e) {
+    e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   }
